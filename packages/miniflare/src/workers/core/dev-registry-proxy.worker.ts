@@ -1,4 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { CorePaths } from "./constants";
 import {
 	resolveTarget,
 	tailEventsReplacer,
@@ -108,7 +109,7 @@ export class ExternalServiceProxy extends WorkerEntrypoint<Env, Props> {
 			params.set("time", String(controller.scheduledTime));
 		}
 		const response = await this._entryFetcher.fetch(
-			new Request(`http://localhost/cdn-cgi/handler/scheduled?${params}`, {
+			new Request(`http://localhost${CorePaths.SCHEDULED}?${params}`, {
 				headers: { "MF-Route-Override": this.ctx.props.service },
 			})
 		);
