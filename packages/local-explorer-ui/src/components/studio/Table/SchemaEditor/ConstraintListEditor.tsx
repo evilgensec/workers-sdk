@@ -21,7 +21,7 @@ interface StudioConstraintListEditorProps {
 export function StudioConstraintListEditor({
 	onChange,
 	value,
-}: StudioConstraintListEditorProps): JSX.Element | null {
+}: StudioConstraintListEditorProps): React.JSX.Element | null {
 	if (value.constraints.length === 0) {
 		return null;
 	}
@@ -42,7 +42,7 @@ export function StudioConstraintListEditor({
 
 				<tbody>
 					{(value.constraints ?? []).map(
-						(constraintChange, constriantIndex): JSX.Element | null => {
+						(constraintChange, constriantIndex): React.JSX.Element | null => {
 							const constraint = constraintChange.new || constraintChange.old;
 							if (!constraint) {
 								return null;
@@ -140,7 +140,7 @@ function SortableColumnList({
 	disabledRearrange,
 	onChange,
 	value,
-}: SortableColumnListProps): JSX.Element {
+}: SortableColumnListProps): React.JSX.Element {
 	const handleDragEnd = useCallback(
 		(event: DragEndEvent): void => {
 			const { active, over } = event;
@@ -179,7 +179,9 @@ interface SortableColumnItemProps {
 	id: string;
 }
 
-function SortableColumnItem({ id }: SortableColumnItemProps): JSX.Element {
+function SortableColumnItem({
+	id,
+}: SortableColumnItemProps): React.JSX.Element {
 	const { attributes, listeners, setNodeRef, transform, transition } =
 		useSortable({ id });
 

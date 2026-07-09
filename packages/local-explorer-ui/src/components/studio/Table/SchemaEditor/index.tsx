@@ -36,7 +36,7 @@ export function StudioTableSchemaEditor({
 	onSaveChange,
 	readOnlyExistingColumns,
 	value,
-}: StudioTableSchemaEditorProps): JSX.Element {
+}: StudioTableSchemaEditorProps): React.JSX.Element {
 	const { openModal } = useModal();
 
 	const editorRef = useRef<StudioCodeMirrorReference>(null);
@@ -234,7 +234,7 @@ interface IndexListProps {
 	indexList: StudioTableIndex[];
 }
 
-function IndexList({ indexList }: IndexListProps): JSX.Element | null {
+function IndexList({ indexList }: IndexListProps): React.JSX.Element | null {
 	if (indexList.length === 0) {
 		return null;
 	}
