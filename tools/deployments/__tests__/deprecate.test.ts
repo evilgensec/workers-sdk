@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { describe, it, vitest } from "vitest";
 import {
 	buildCommands,
+	buildDependantsGraph,
 	checkNpmLogin,
 	getRequiredDependants,
 	parseArgs,
@@ -16,23 +17,60 @@ vitest.mock("node:child_process", async () => {
 	};
 });
 
+// A fixed graph for unit-testing getRequiredDependants in isolation
+const TEST_GRAPH: Record<string, string[]> = {
+	miniflare: ["wrangler", "pkg-a", "pkg-b"],
+	wrangler: ["pkg-a", "pkg-b"],
+	"pkg-a": [],
+	"pkg-b": [],
+	"pkg-c": [],
+};
+
+describe("buildDependantsGraph()", () => {
+	it("should build the graph from local package.json files", ({ expect }) => {
+		const graph = buildDependantsGraph();
+
+		// Core packages must be present
+		expect(graph).toHaveProperty("miniflare");
+		expect(graph).toHaveProperty("wrangler");
+		expect(graph).toHaveProperty("@cloudflare/vite-plugin");
+		expect(graph).toHaveProperty("@cloudflare/vitest-pool-workers");
+		expect(graph).toHaveProperty("create-cloudflare");
+
+		// wrangler depends on miniflare, so miniflare's dependants must include wrangler
+		expect(graph["miniflare"]).toContain("wrangler");
+
+		// vite-plugin depends on both miniflare and wrangler
+		expect(graph["miniflare"]).toContain("@cloudflare/vite-plugin");
+		expect(graph["wrangler"]).toContain("@cloudflare/vite-plugin");
+
+		// vitest-pool-workers depends on both miniflare and wrangler
+		expect(graph["miniflare"]).toContain("@cloudflare/vitest-pool-workers");
+		expect(graph["wrangler"]).toContain("@cloudflare/vitest-pool-workers");
+
+		// Private packages should not be in the graph
+		expect(graph).not.toHaveProperty("@cloudflare/workers-shared");
+		expect(graph).not.toHaveProperty("@cloudflare/containers-shared");
+	});
+});
+
 describe("getRequiredDependants()", () => {
 	it("should return missing dependants when deprecating miniflare alone", ({
 		expect,
 	}) => {
-		expect(getRequiredDependants(["miniflare"])).toEqual([
+		expect(getRequiredDependants(["miniflare"], TEST_GRAPH)).toEqual([
 			"wrangler",
-			"@cloudflare/vite-plugin",
-			"@cloudflare/vitest-pool-workers",
+			"pkg-a",
+			"pkg-b",
 		]);
 	});
 
 	it("should return missing dependants when deprecating wrangler alone", ({
 		expect,
 	}) => {
-		expect(getRequiredDependants(["wrangler"])).toEqual([
-			"@cloudflare/vite-plugin",
-			"@cloudflare/vitest-pool-workers",
+		expect(getRequiredDependants(["wrangler"], TEST_GRAPH)).toEqual([
+			"pkg-a",
+			"pkg-b",
 		]);
 	});
 
@@ -40,11 +78,7 @@ describe("getRequiredDependants()", () => {
 		expect,
 	}) => {
 		expect(
-			getRequiredDependants([
-				"wrangler",
-				"@cloudflare/vite-plugin",
-				"@cloudflare/vitest-pool-workers",
-			])
+			getRequiredDependants(["wrangler", "pkg-a", "pkg-b"], TEST_GRAPH)
 		).toEqual([]);
 	});
 
@@ -52,41 +86,27 @@ describe("getRequiredDependants()", () => {
 		expect,
 	}) => {
 		expect(
-			getRequiredDependants([
-				"miniflare",
-				"wrangler",
-				"@cloudflare/vite-plugin",
-				"@cloudflare/vitest-pool-workers",
-			])
+			getRequiredDependants(
+				["miniflare", "wrangler", "pkg-a", "pkg-b"],
+				TEST_GRAPH
+			)
 		).toEqual([]);
 	});
 
-	it("should return empty for create-cloudflare alone", ({ expect }) => {
-		expect(getRequiredDependants(["create-cloudflare"])).toEqual([]);
-	});
-
-	it("should return empty for vite-plugin alone", ({ expect }) => {
-		expect(getRequiredDependants(["@cloudflare/vite-plugin"])).toEqual([]);
-	});
-
-	it("should return empty for vitest-pool-workers alone", ({ expect }) => {
-		expect(getRequiredDependants(["@cloudflare/vitest-pool-workers"])).toEqual(
-			[]
-		);
+	it("should return empty for a leaf package alone", ({ expect }) => {
+		expect(getRequiredDependants(["pkg-c"], TEST_GRAPH)).toEqual([]);
 	});
 
 	it("should not duplicate missing dependants when multiple packages share them", ({
 		expect,
 	}) => {
-		// Both miniflare and wrangler require vite-plugin and vitest-pool-workers
-		expect(getRequiredDependants(["miniflare", "wrangler"])).toEqual([
-			"@cloudflare/vite-plugin",
-			"@cloudflare/vitest-pool-workers",
-		]);
+		expect(
+			getRequiredDependants(["miniflare", "wrangler"], TEST_GRAPH)
+		).toEqual(["pkg-a", "pkg-b"]);
 	});
 
 	it("should throw for an unknown package", ({ expect }) => {
-		expect(() => getRequiredDependants(["unknown-pkg"])).toThrow(
+		expect(() => getRequiredDependants(["unknown-pkg"], TEST_GRAPH)).toThrow(
 			/"unknown-pkg" is not a known package/
 		);
 	});

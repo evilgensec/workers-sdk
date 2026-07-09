@@ -1,24 +1,70 @@
 import { execSync, spawnSync } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { createInterface } from "node:readline";
 
 /**
- * Dependency graph for published workers-sdk packages.
- * Keys are packages; values are packages that depend on the key
- * and must be deprecated alongside it.
+ * Reads packages/.../package.json to build a dependants graph for all
+ * non-private packages. For each package, lists which other non-private
+ * packages depend on it (via workspace: references in dependencies or
+ * peerDependencies).
  */
-export const DEPENDANTS: Record<string, string[]> = {
-	miniflare: [
-		"wrangler",
-		"@cloudflare/vite-plugin",
-		"@cloudflare/vitest-pool-workers",
-	],
-	wrangler: ["@cloudflare/vite-plugin", "@cloudflare/vitest-pool-workers"],
-	"create-cloudflare": [],
-	"@cloudflare/vite-plugin": [],
-	"@cloudflare/vitest-pool-workers": [],
-};
+export function buildDependantsGraph(
+	packagesDir: string = path.resolve(__dirname, "../../packages")
+): Record<string, string[]> {
+	const packageDirs = readdirSync(packagesDir, { withFileTypes: true })
+		.filter((d) => d.isDirectory())
+		.map((d) => path.resolve(packagesDir, d.name));
 
-const KNOWN_PACKAGES = Object.keys(DEPENDANTS);
+	// Collect all non-private packages
+	const packages: { name: string; deps: string[] }[] = [];
+	const knownNames = new Set<string>();
+
+	for (const dir of packageDirs) {
+		let pkg: {
+			name?: string;
+			private?: boolean;
+			dependencies?: Record<string, string>;
+			peerDependencies?: Record<string, string>;
+		};
+		try {
+			pkg = JSON.parse(
+				readFileSync(path.resolve(dir, "package.json"), "utf-8")
+			);
+		} catch {
+			continue;
+		}
+		if (pkg.private || !pkg.name) {
+			continue;
+		}
+		knownNames.add(pkg.name);
+
+		const allDeps = {
+			...pkg.dependencies,
+			...pkg.peerDependencies,
+		};
+		const workspaceDeps = Object.entries(allDeps)
+			.filter(([, v]) => v.startsWith("workspace:"))
+			.map(([k]) => k);
+
+		packages.push({ name: pkg.name, deps: workspaceDeps });
+	}
+
+	// Build the dependants graph: for each package, which known packages depend on it
+	const dependants: Record<string, string[]> = {};
+	for (const name of knownNames) {
+		dependants[name] = [];
+	}
+	for (const { name, deps } of packages) {
+		for (const dep of deps) {
+			if (dep in dependants) {
+				dependants[dep].push(name);
+			}
+		}
+	}
+
+	return dependants;
+}
 
 export interface PackageSpec {
 	name: string;
@@ -42,17 +88,21 @@ interface NpmRegistryResponse {
  * Given a list of package names the user wants to deprecate,
  * returns any dependants from the graph that are missing.
  */
-export function getRequiredDependants(packageNames: string[]): string[] {
+export function getRequiredDependants(
+	packageNames: string[],
+	graph: Record<string, string[]>
+): string[] {
+	const knownPackages = Object.keys(graph);
 	const provided = new Set(packageNames);
 	const missing: string[] = [];
 
 	for (const name of packageNames) {
-		if (!(name in DEPENDANTS)) {
+		if (!(name in graph)) {
 			throw new Error(
-				`"${name}" is not a known package. Known packages:\n  ${KNOWN_PACKAGES.join(", ")}`
+				`"${name}" is not a known package. Known packages:\n  ${knownPackages.join(", ")}`
 			);
 		}
-		for (const dep of DEPENDANTS[name]) {
+		for (const dep of graph[name]) {
 			if (!provided.has(dep) && !missing.includes(dep)) {
 				missing.push(dep);
 			}
@@ -308,9 +358,9 @@ Examples:
     @cloudflare/vite-plugin@1.43.2 \\
     @cloudflare/vitest-pool-workers@0.18.2
 
-Dependency rules (enforced automatically):
-  miniflare    -> must also deprecate wrangler, vite-plugin, vitest-pool-workers
-  wrangler     -> must also deprecate vite-plugin, vitest-pool-workers
+Dependency rules are derived from local package.json files and enforced automatically.
+For example, deprecating wrangler also requires deprecating @cloudflare/vite-plugin
+and @cloudflare/vitest-pool-workers because they depend on it.
 `.trim();
 
 export async function main(argv: string[] = process.argv.slice(2)) {
@@ -321,11 +371,14 @@ export async function main(argv: string[] = process.argv.slice(2)) {
 
 	const { packages, reason, dryRun } = parseArgs(argv);
 
+	const graph = buildDependantsGraph();
+	const knownPackages = Object.keys(graph);
+
 	// Validate all packages are known
 	for (const { name } of packages) {
-		if (!(name in DEPENDANTS)) {
+		if (!(name in graph)) {
 			console.error(
-				`Error: "${name}" is not a known package. Known packages:\n  ${KNOWN_PACKAGES.join(", ")}`
+				`Error: "${name}" is not a known package. Known packages:\n  ${knownPackages.join(", ")}`
 			);
 			process.exit(1);
 		}
@@ -333,10 +386,10 @@ export async function main(argv: string[] = process.argv.slice(2)) {
 
 	// Validate the dependency graph is satisfied
 	const packageNames = packages.map((p) => p.name);
-	const missing = getRequiredDependants(packageNames);
+	const missing = getRequiredDependants(packageNames, graph);
 	if (missing.length > 0) {
 		const sources = packageNames
-			.filter((name) => DEPENDANTS[name].some((d) => missing.includes(d)))
+			.filter((name) => graph[name].some((d) => missing.includes(d)))
 			.join(", ");
 		console.error(
 			`Error: Deprecating ${sources} requires also deprecating:\n  ${missing.map((m) => `- ${m}`).join("\n  ")}\n\nRe-run with versions for all affected packages.`
