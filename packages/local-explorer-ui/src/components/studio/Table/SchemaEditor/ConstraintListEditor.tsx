@@ -11,7 +11,7 @@ import { produce } from "immer";
 import { useCallback } from "react";
 import type { StudioTableSchemaChange } from "../../../../types/studio";
 import type { DragEndEvent } from "@dnd-kit/core";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, JSX, SetStateAction } from "react";
 
 interface StudioConstraintListEditorProps {
 	onChange: Dispatch<SetStateAction<StudioTableSchemaChange>>;
@@ -21,7 +21,7 @@ interface StudioConstraintListEditorProps {
 export function StudioConstraintListEditor({
 	onChange,
 	value,
-}: StudioConstraintListEditorProps): React.JSX.Element | null {
+}: StudioConstraintListEditorProps): JSX.Element | null {
 	if (value.constraints.length === 0) {
 		return null;
 	}
@@ -42,7 +42,7 @@ export function StudioConstraintListEditor({
 
 				<tbody>
 					{(value.constraints ?? []).map(
-						(constraintChange, constriantIndex): React.JSX.Element | null => {
+						(constraintChange, constriantIndex): JSX.Element | null => {
 							const constraint = constraintChange.new || constraintChange.old;
 							if (!constraint) {
 								return null;
@@ -140,7 +140,7 @@ function SortableColumnList({
 	disabledRearrange,
 	onChange,
 	value,
-}: SortableColumnListProps): React.JSX.Element {
+}: SortableColumnListProps): JSX.Element {
 	const handleDragEnd = useCallback(
 		(event: DragEndEvent): void => {
 			const { active, over } = event;
@@ -179,9 +179,7 @@ interface SortableColumnItemProps {
 	id: string;
 }
 
-function SortableColumnItem({
-	id,
-}: SortableColumnItemProps): React.JSX.Element {
+function SortableColumnItem({ id }: SortableColumnItemProps): JSX.Element {
 	const { attributes, listeners, setNodeRef, transform, transition } =
 		useSortable({ id });
 
