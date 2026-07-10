@@ -30,7 +30,8 @@ describe("Compatibility Date Helpers", () => {
 						}
 						return {};
 					}) as NodeJS.Require;
-					mockedRequire.resolve = ((pkg: string) => pkg) as NodeJS.RequireResolve;
+					mockedRequire.resolve = ((pkg: string) =>
+						pkg) as NodeJS.RequireResolve;
 					return mockedRequire;
 				});
 

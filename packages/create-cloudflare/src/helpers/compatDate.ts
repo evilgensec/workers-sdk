@@ -1,5 +1,5 @@
-import module from "node:module";
 import { readdirSync } from "node:fs";
+import module from "node:module";
 import { join, resolve } from "node:path";
 import { brandColor, dim } from "@cloudflare/cli-shared-helpers/colors";
 import { spinner } from "@cloudflare/cli-shared-helpers/interactive";
@@ -27,7 +27,9 @@ function getSafeWorkerdCompatibilityDate(projectPath: string) {
 	try {
 		// Note: createRequire expects a filename, not a directory. Appending
 		// `package.json` ensures module resolution starts from the project path.
-		const projectRequire = module.createRequire(join(projectPath, "package.json"));
+		const projectRequire = module.createRequire(
+			join(projectPath, "package.json")
+		);
 		const miniflareEntry = projectRequire.resolve("miniflare");
 		const miniflareRequire = module.createRequire(miniflareEntry);
 		const miniflareWorkerd = miniflareRequire("workerd") as {
