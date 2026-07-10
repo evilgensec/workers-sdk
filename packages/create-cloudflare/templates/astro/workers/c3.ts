@@ -4,6 +4,7 @@ import { runCommand } from "@cloudflare/cli-shared-helpers/command";
 import { runFrameworkGenerator } from "frameworks/index";
 import { usesTypescript } from "helpers/files";
 import { detectPackageManager } from "helpers/packageManagers";
+import { updateWranglerConfig } from "../../../src/wrangler/config";
 import type { TemplateConfig } from "../../../src/templates";
 import type { C3Context, PackageJson } from "types";
 
@@ -23,7 +24,7 @@ const generate = async (ctx: C3Context) => {
 	logRaw(""); // newline
 };
 
-const configure = async () => {
+const configure = async (ctx: C3Context) => {
 	await runCommand([npx, "astro", "add", "cloudflare", "-y"], {
 		silent: true,
 		startText: "Installing adapter",
@@ -31,6 +32,11 @@ const configure = async () => {
 			`via \`${npx} astro add cloudflare\``
 		)}`,
 	});
+
+	// `astro add cloudflare` creates Wrangler config after C3's initial config pass.
+	// Re-apply the locally supported compat date so generated projects work with the
+	// bundled workerd used in local dev and C3 e2e.
+	await updateWranglerConfig(ctx, { forceCompatibilityDate: true });
 };
 
 const config: TemplateConfig = {

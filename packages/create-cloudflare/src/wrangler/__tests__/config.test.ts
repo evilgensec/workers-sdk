@@ -447,6 +447,22 @@ describe("update wrangler config", () => {
 		`);
 	});
 
+	test("can force replacement of an existing compatibility date", async ({
+		expect,
+	}) => {
+		const toml = [
+			`name = "super-new-worker"`,
+			`compatibility_date = "2099-10-12"`,
+		].join("\n");
+		vi.mocked(readFile).mockReturnValue(toml);
+
+		await updateWranglerConfig(ctx, { forceCompatibilityDate: true });
+
+		const newToml = vi.mocked(writeFile).mock.calls[0][1];
+		expect(newToml).toContain('compatibility_date = "2024-01-17"');
+		expect(newToml).not.toContain('compatibility_date = "2099-10-12"');
+	});
+
 	test("placeholder replacement with Workflows (json)", async ({ expect }) => {
 		vi.mocked(existsSync).mockImplementationOnce((f) =>
 			(f as string).endsWith(".json")

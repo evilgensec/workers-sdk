@@ -30,7 +30,10 @@ import type { C3Context } from "types";
  * If both `wrangler.toml` and `wrangler.json`/`wrangler.jsonc` are present, only
  * the `wrangler.json`/`wrangler.jsonc` file will be updated.
  */
-export const updateWranglerConfig = async (ctx: C3Context) => {
+export const updateWranglerConfig = async (
+	ctx: C3Context,
+	options: { forceCompatibilityDate?: boolean } = {}
+) => {
 	// Placeholders to replace in the wrangler config files
 	const substitutions: Record<string, string> = {
 		"<WORKER_NAME>": ctx.project.name,
@@ -60,10 +63,12 @@ export const updateWranglerConfig = async (ctx: C3Context) => {
 		wranglerJson = appendJSONProperty(
 			wranglerJson,
 			"compatibility_date",
-			await getCompatibilityDate(
-				wranglerJson.compatibility_date,
-				ctx.project.path
-			)
+			options.forceCompatibilityDate
+				? getWorkerdCompatibilityDate(ctx.project.path)
+				: await getCompatibilityDate(
+						wranglerJson.compatibility_date,
+						ctx.project.path
+					)
 		);
 		wranglerJson = appendJSONProperty(wranglerJson, "observability", {
 			enabled: true,
@@ -91,10 +96,12 @@ export const updateWranglerConfig = async (ctx: C3Context) => {
 
 		const wranglerToml = TOML.parse(strToml);
 		wranglerToml.name = ctx.project.name;
-		wranglerToml.compatibility_date = await getCompatibilityDate(
-			wranglerToml.compatibility_date,
-			ctx.project.path
-		);
+		wranglerToml.compatibility_date = options.forceCompatibilityDate
+			? getWorkerdCompatibilityDate(ctx.project.path)
+			: await getCompatibilityDate(
+					wranglerToml.compatibility_date,
+					ctx.project.path
+				);
 		wranglerToml.observability ??= { enabled: true };
 		// Skip adding upload_source_maps and nodejs_compat for Python projects
 		if (ctx.args.lang !== "python") {
