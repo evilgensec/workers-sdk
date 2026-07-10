@@ -1,8 +1,9 @@
+import module from "node:module";
 import { readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { brandColor, dim } from "@cloudflare/cli-shared-helpers/colors";
 import { spinner } from "@cloudflare/cli-shared-helpers/interactive";
-import { getTodaysCompatDate } from "@cloudflare/workers-utils";
+import { getTodaysCompatDate, isCompatDate } from "@cloudflare/workers-utils";
 import type { C3Context } from "types";
 
 /**
@@ -10,14 +11,40 @@ import type { C3Context } from "types";
  *
  * @returns Today's date in the form "YYYY-MM-DD"
  */
-export function getWorkerdCompatibilityDate(_projectPath: string) {
+export function getWorkerdCompatibilityDate(projectPath: string) {
 	const s = spinner();
 	s.start("Retrieving current workerd compatibility date");
 
-	const date = getTodaysCompatDate();
+	const date = getSafeWorkerdCompatibilityDate(projectPath);
 
 	s.stop(`${brandColor("compatibility date")} ${dim(date)}`);
 	return date;
+}
+
+function getSafeWorkerdCompatibilityDate(projectPath: string) {
+	const todaysDate = getTodaysCompatDate();
+
+	try {
+		// Note: createRequire expects a filename, not a directory. Appending
+		// `package.json` ensures module resolution starts from the project path.
+		const projectRequire = module.createRequire(join(projectPath, "package.json"));
+		const miniflareEntry = projectRequire.resolve("miniflare");
+		const miniflareRequire = module.createRequire(miniflareEntry);
+		const miniflareWorkerd = miniflareRequire("workerd") as {
+			compatibilityDate?: string;
+		};
+
+		if (
+			miniflareWorkerd.compatibilityDate &&
+			isCompatDate(miniflareWorkerd.compatibilityDate)
+		) {
+			return miniflareWorkerd.compatibilityDate > todaysDate
+				? todaysDate
+				: miniflareWorkerd.compatibilityDate;
+		}
+	} catch {}
+
+	return todaysDate;
 }
 
 /**
